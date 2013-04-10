@@ -5,8 +5,7 @@ require 'optparse/date'
 require 'ruby-progressbar'
 require 'utils'
 require 'config'
-
-@pb = ProgressBar.create(:title => 'Logging', :starting_at => 0, :total => 100, :progress_mark => '*', :format => '%w %%')
+require 'version'
 
 # Parse arguments
 options = {}
@@ -58,6 +57,10 @@ op = OptionParser.new do |opts|
     options[:tm_list] = list
   end
 
+  opts.on("-L ProjectPartName", "List some specific projects and changes.") do |l|
+    options[:tm_s_list] = l
+  end
+
   opts.on("-p ProjectName", "The project full Name or part name.") do |project|
     options[:tm_project] = project
   end
@@ -90,14 +93,25 @@ op = OptionParser.new do |opts|
     puts op
     exit
   end
+
+  opts.on_tail("-v", "Show version") do
+    puts Mtm::VERSION
+    exit
+  end
 end
-op.parse(ARGV)
+
+begin
+  op.parse(ARGV)
+rescue Exception => e
+  abort e.message
+end
 
 if ARGV.size < 1
   puts op
   exit
 end
 
+@pb = ProgressBar.create(:title => 'Logging', :starting_at => 0, :total => 100, :progress_mark => '*', :format => '%w %%')
 40.times { sleep(0.05); @pb.increment }
 
 # login to salesforce.com
@@ -122,6 +136,28 @@ if options[:tm_list]
   40.times { sleep(0.05); @pb.increment }
   projects = client.query("select Id, Name, ProjectNumber__c, (select Id, Name, ChangeNumber__c from Changes__r
                                     where Status__c != 'Closed') from MProject__c where Status__c != 'Closed'")
+  projects.each do |p|
+    puts
+    puts p.ProjectNumber__c + ': ' + p.Name
+    if p.Changes__r != nil
+      p.Changes__r.each do |c|
+        puts '     '+ c.ChangeNumber__c + ': ' + c.Name
+      end
+    end
+  end
+  @pb.finish
+  abort
+end
+
+# list some projects and its changes
+if options[:tm_s_list] != nil
+  40.times { sleep(0.05); @pb.increment }
+  projects = client.query("select Id, Name, ProjectNumber__c, (select Id, Name, ChangeNumber__c from Changes__r
+                                    where Status__c != 'Closed') from MProject__c where Status__c != 'Closed' and Name like '%#{options[:tm_s_list]}%'")
+  if projects.size == 0
+    puts
+    abort 'No project found'
+  end
   projects.each do |p|
     puts
     puts p.ProjectNumber__c + ': ' + p.Name
