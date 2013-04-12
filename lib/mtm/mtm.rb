@@ -1,11 +1,7 @@
 $LOAD_PATH.unshift(File.dirname(__FILE__)) unless $LOAD_PATH.include?(File.dirname(__FILE__))
-require 'rubygems'
-require 'sfdc' # gem install sfdc
-require 'optparse/date'
-require 'ruby-progressbar'
-require 'utils'
-require 'config'
-require 'version'
+%w(sfdc optparse/date ruby-progressbar utils config version).each do |file|
+  require "#{file}"
+end
 
 # Parse arguments
 options = {}
@@ -22,6 +18,7 @@ options[:tm_c_number] = SF_CHANGE_NUMBER
 options[:tm_hour] = SF_HOUR
 options[:tm_date] = DateTime.now.to_date
 options[:tm_description] = SF_TIMECARD_DESCRIPTION
+options[:feeds] = false
 
 # salesforce remote app client id
 sf_client_id = '3MVG9Y6d_Btp4xp6SWO6yPlUURnycVbOfuH7I_NH2bjaw0yeoguRatNzKRpEVaIvmX7TcQbVVjuQUCZ006pwN'
@@ -32,7 +29,7 @@ op = OptionParser.new do |opts|
   opts.banner = <<-BANNER
     Timecard Solution
     Usage: run 'gem environment' in your console and find the 'GEM PATHS'
-           go to 'GEM PATHS/gems/mtm-2.2.0/lib/mtm'
+           go to 'GEM PATHS/gems/mtm-3.0.0/lib/mtm'
            open config.rb and input your Salesforce user name and password(token).
            mtm -p project -c change -t 6 -e 'Added exception process logic.'
   BANNER
@@ -89,6 +86,10 @@ op = OptionParser.new do |opts|
     options[:tm_description] = desc
   end
 
+  opts.on("-f", "List your Chatter feeds") do |f|
+    options[:feeds] = f
+  end
+
   opts.on_tail("-h", "--help", "Show help message") do
     puts op
     exit
@@ -111,7 +112,7 @@ if ARGV.size < 1
   exit
 end
 
-@pb = ProgressBar.create(:title => 'Logging', :starting_at => 0, :total => 100, :progress_mark => '*', :format => '%w %%')
+@pb = ProgressBar.create(title: 'Logging', starting_at: 0, total: 100, progress_mark: '*', format: '%w %%')
 40.times { sleep(0.05); @pb.increment }
 
 # login to salesforce.com
@@ -129,6 +130,18 @@ rescue Exception => e
   puts
   puts e.message
   abort 'Failed to connect to Salesforce.'
+end
+
+# List your Chatter feeds
+if options[:feeds]
+  puts
+  client.feeds.each do |f|
+    puts f.to_hash['actor']['name'] << ': '
+    puts '      '<< f.to_hash['body']['text']
+    puts
+  end
+  @pb.finish
+  abort
 end
 
 # list all projects and its changes
